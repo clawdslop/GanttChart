@@ -340,14 +340,76 @@ const GanttRender = (() => {
     bar.classList.add('tc-dragging');
     document.body.style.cursor = mode === 'move' ? 'grabbing' : 'ew-resize';
     document.body.style.userSelect = 'none';
+    const linkedStandaloneMsIds = segIdx < 0
+      ? App.getTasks().filter(t => t.isMilestone && t.linkedTaskId === taskId).map(t => t.id)
+      : [];
 
     let highlightedRow = null;
     function clearHighlight() {
       if (highlightedRow) { highlightedRow.classList.remove('tc-lane-drop-target'); highlightedRow = null; }
     }
 
+    function currentDraggedBarEl() {
+      const safeTaskId = (window.CSS && CSS.escape) ? CSS.escape(taskId) : taskId;
+      if (segIdx >= 0) {
+        return document.querySelector(`.tc-bar[data-task-id="${safeTaskId}"][data-seg-idx="${segIdx}"]`);
+      }
+      return document.querySelector(`.tc-bar[data-task-id="${safeTaskId}"]:not([data-seg-idx])`);
+    }
+
+    function applyDragPreview(dy) {
+      if (mode !== 'move') return;
+      const draggedBar = currentDraggedBarEl();
+      if (draggedBar) {
+        draggedBar.classList.add('tc-dragging');
+        draggedBar.style.transform = `translateY(${dy}px)`;
+        draggedBar.style.zIndex = '100';
+      }
+
+      if (segIdx >= 0) return;
+
+      const safeTaskId = (window.CSS && CSS.escape) ? CSS.escape(taskId) : taskId;
+      document.querySelectorAll(`.tc-ams[data-task-id="${safeTaskId}"]`).forEach(el => {
+        el.style.transform = `translateY(${dy}px)`;
+        el.style.zIndex = '101';
+      });
+
+      linkedStandaloneMsIds.forEach(msId => {
+        const safeMsId = (window.CSS && CSS.escape) ? CSS.escape(msId) : msId;
+        document.querySelectorAll(`.tc-milestone[data-ms-id="${safeMsId}"]`).forEach(el => {
+          el.style.transform = `translate(-50%, calc(-50% + ${dy}px))`;
+          el.style.zIndex = '101';
+        });
+      });
+    }
+
+    function clearDragPreview() {
+      const draggedBar = currentDraggedBarEl();
+      if (draggedBar) {
+        draggedBar.style.transform = '';
+        draggedBar.style.zIndex = '';
+        draggedBar.classList.remove('tc-dragging');
+      }
+
+      if (segIdx >= 0) return;
+
+      const safeTaskId = (window.CSS && CSS.escape) ? CSS.escape(taskId) : taskId;
+      document.querySelectorAll(`.tc-ams[data-task-id="${safeTaskId}"]`).forEach(el => {
+        el.style.transform = '';
+        el.style.zIndex = '';
+      });
+      linkedStandaloneMsIds.forEach(msId => {
+        const safeMsId = (window.CSS && CSS.escape) ? CSS.escape(msId) : msId;
+        document.querySelectorAll(`.tc-milestone[data-ms-id="${safeMsId}"]`).forEach(el => {
+          el.style.transform = '';
+          el.style.zIndex = '';
+        });
+      });
+    }
+
     function onMove(ev) {
       const dd = Math.round(((ev.clientX - startX) / cellW) * _timeline.totalDays);
+      const dy = ev.clientY - startY;
       let ns, ne;
       if (mode === 'move') { ns = addD(origS, dd); ne = addD(origE, dd); }
       else if (mode === 'resize-start') { ns = addD(origS, dd); ne = new Date(origE); if (ns > ne) ns = new Date(ne); }
@@ -369,15 +431,18 @@ const GanttRender = (() => {
         });
       }
 
-      if (!dd) return;
-      if (segIdx >= 0) {
-        App.updateSegment(taskId, segIdx, { start: ds(ns), end: ds(ne) }, { chartOnly: true });
-      } else {
-        App.updateTask(taskId, { start: ds(ns), end: ds(ne) }, { chartOnly: true });
+      if (dd) {
+        if (segIdx >= 0) {
+          App.updateSegment(taskId, segIdx, { start: ds(ns), end: ds(ne) }, { chartOnly: true });
+        } else {
+          App.updateTask(taskId, { start: ds(ns), end: ds(ne) }, { chartOnly: true });
+        }
       }
+      applyDragPreview(dy);
     }
 
     function onUp(ev) {
+      clearDragPreview();
       bar.classList.remove('tc-dragging');
       document.body.style.cursor = '';
       document.body.style.userSelect = '';
@@ -404,6 +469,9 @@ const GanttRender = (() => {
             return;
           } else {
             App.moveBarToTask(taskId, targetId);
+            linkedStandaloneMsIds.forEach(msId => {
+              App.updateTask(msId, { linkedTaskId: targetId }, { chartOnly: true });
+            });
             return;
           }
         }
