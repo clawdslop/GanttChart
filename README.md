@@ -1,4 +1,4 @@
-# Gantt Chart Generator
+# SuperGantt
 
 A zero-install, local HTML/JS application for creating professional Gantt charts with a think-cell-inspired aesthetic and PowerPoint export.
 

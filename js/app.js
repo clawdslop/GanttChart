@@ -22,6 +22,7 @@ const DEFAULT_SETTINGS = {
   msColor: '#37474F',
   timeScale: { showYears: true, showMonths: true, showWeeks: true },
   presetMsColors: ['#2E7D32', '#F9A825', '#C62828'],
+  showLegend: true,
 };
 
 const STORAGE_KEY = 'gantt-v3';
@@ -137,6 +138,21 @@ const App = (() => {
     if (fromIdx === toIdx || fromIdx < 0 || toIdx < 0 || fromIdx >= tasks.length || toIdx >= tasks.length) return;
     const [item] = tasks.splice(fromIdx, 1);
     tasks.splice(toIdx, 0, item);
+    
+    // Move linked milestones with the task
+    if (!item.isMilestone) {
+      const linkedMs = tasks.filter(t => t.isMilestone && t.linkedTaskId === item.id);
+      linkedMs.forEach(ms => {
+        const msIdx = tasks.indexOf(ms);
+        if (msIdx > -1) {
+          tasks.splice(msIdx, 1);
+          // Insert milestone right after the moved task
+          const newTaskIdx = tasks.indexOf(item);
+          tasks.splice(newTaskIdx + 1, 0, ms);
+        }
+      });
+    }
+    
     save(); _onChange();
   }
 
@@ -423,10 +439,12 @@ const App = (() => {
     const today = document.getElementById('setting-show-today');
     const msDates = document.getElementById('setting-show-ms-dates');
     const msCol = document.getElementById('setting-ms-color');
+    const legend = document.getElementById('setting-show-legend');
     if (fmt) fmt.value = settings.dateFormat;
     if (today) today.checked = settings.showToday;
     if (msDates) msDates.checked = settings.showMsDates;
     if (msCol) msCol.value = settings.msColor;
+    if (legend) legend.checked = settings.showLegend !== false;
     const ts = settings.timeScale || {};
     const tsY = document.getElementById('setting-ts-years');
     const tsM = document.getElementById('setting-ts-months');
@@ -582,6 +600,7 @@ const App = (() => {
     document.getElementById('setting-show-today').addEventListener('change', e => updateSettings({ showToday: e.target.checked }));
     document.getElementById('setting-show-ms-dates').addEventListener('change', e => updateSettings({ showMsDates: e.target.checked }));
     document.getElementById('setting-ms-color').addEventListener('input', e => updateSettings({ msColor: e.target.value }));
+    document.getElementById('setting-show-legend').addEventListener('change', e => updateSettings({ showLegend: e.target.checked }));
 
     // Time scale settings
     function tsChange() {

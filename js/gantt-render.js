@@ -236,9 +236,9 @@ const GanttRender = (() => {
       html += '</div>';
     }
 
-    // Scope legend
+    // Scope legend (if enabled in settings)
     const allScopes = App.getScopes();
-    if (allScopes.length) {
+    if (allScopes.length && s.showLegend !== false) {
       html += '<div class="tc-scope-legend">';
       allScopes.forEach(sc => {
         html += `<div class="tc-scope-legend-item"><span class="tc-scope-legend-swatch" style="background:${sc.color}"></span>${esc(sc.name)}</div>`;
