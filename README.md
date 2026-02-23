@@ -4,19 +4,9 @@ A zero-install, local HTML/JS application for creating professional Gantt charts
 
 ## Quick Start
 
-1. **Open directly** – Double-click `index.html` in any modern browser.
-2. **Or use a local server** (recommended for best compatibility):
-   ```bash
-   # Python 3
-   cd GanttChart
-   python3 -m http.server 8080
+**Just open `index.html` in your browser.** That's it — no server, no install, no build step.
 
-   # Node.js (npx, no install needed)
-   npx serve .
-   ```
-   Then open `http://localhost:8080`.
-
-> **Windows users**: The `file://` protocol works fine in Chrome and Edge. On Firefox, localStorage may be restricted under `file://` — use a local server instead.
+> **Note**: On Firefox, localStorage may be restricted under `file://` — use Chrome/Edge or a local server if you need auto-save.
 
 ## Features
 
