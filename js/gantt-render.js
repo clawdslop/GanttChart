@@ -184,6 +184,21 @@ const GanttRender = (() => {
         html += '<div class="tc-bar-handle tc-bar-handle-l"></div>';
         html += '<div class="tc-bar-handle tc-bar-handle-r"></div>';
         html += '</div>';
+
+        (seg.milestones || []).forEach((am, ai) => {
+          const amOff = daysBetween(minDate, new Date(am.date));
+          const amPct = ((amOff + 0.5) / totalDays) * 100;
+          const mt = (App.getMsTypes() || []).find(x => x.type === am.type);
+          const amColor = am.done ? '#2E7D32' : (am.color || (mt ? mt.color : null) || s.msColor || '#607D8B');
+          const displayLabel = am.label || am.type;
+          const dateLabel = s.showMsDates ? `<div class="tc-ams-date">${App.formatDate(am.date)}</div>` : '';
+          const pinCls = am.pin ? ' tc-ams-pinned' : '';
+          html += `<div class="tc-ams tc-seg-ams${pinCls}" style="left:${amPct}%" title="${esc(am.type + ': ' + displayLabel)}" data-task-id="${t.id}" data-seg-idx="${si}" data-ams-idx="${ai}">`;
+          html += `<div class="tc-ams-marker" style="color:${amColor}">${am.done ? '✓' : '▲'}</div>`;
+          html += `<div class="tc-ams-label">${esc(displayLabel)}</div>`;
+          html += dateLabel;
+          html += '</div>';
+        });
       });
 
       // Activity milestones
@@ -310,7 +325,7 @@ const GanttRender = (() => {
   function bindBarDrag(container) {
     container.querySelectorAll('.tc-bar[data-task-id]').forEach(b => b.addEventListener('mousedown', onBarMouseDown));
     container.querySelectorAll('.tc-milestone[data-ms-id]').forEach(m => m.addEventListener('mousedown', onStandaloneMsDown));
-    container.querySelectorAll('.tc-ams[data-task-id]').forEach(a => a.addEventListener('mousedown', onAmsMouseDown));
+    container.querySelectorAll('.tc-ams[data-task-id]:not([data-seg-idx])').forEach(a => a.addEventListener('mousedown', onAmsMouseDown));
   }
 
   function onBarMouseDown(e) {
@@ -366,7 +381,14 @@ const GanttRender = (() => {
         draggedBar.style.zIndex = '100';
       }
 
-      if (segIdx >= 0) return;
+      if (segIdx >= 0) {
+        const safeTaskId = (window.CSS && CSS.escape) ? CSS.escape(taskId) : taskId;
+        document.querySelectorAll(`.tc-ams[data-task-id="${safeTaskId}"][data-seg-idx="${segIdx}"]`).forEach(el => {
+          el.style.transform = `translateY(${dy}px)`;
+          el.style.zIndex = '101';
+        });
+        return;
+      }
 
       const safeTaskId = (window.CSS && CSS.escape) ? CSS.escape(taskId) : taskId;
       document.querySelectorAll(`.tc-ams[data-task-id="${safeTaskId}"]`).forEach(el => {
@@ -391,7 +413,14 @@ const GanttRender = (() => {
         draggedBar.classList.remove('tc-dragging');
       }
 
-      if (segIdx >= 0) return;
+      if (segIdx >= 0) {
+        const safeTaskId = (window.CSS && CSS.escape) ? CSS.escape(taskId) : taskId;
+        document.querySelectorAll(`.tc-ams[data-task-id="${safeTaskId}"][data-seg-idx="${segIdx}"]`).forEach(el => {
+          el.style.transform = '';
+          el.style.zIndex = '';
+        });
+        return;
+      }
 
       const safeTaskId = (window.CSS && CSS.escape) ? CSS.escape(taskId) : taskId;
       document.querySelectorAll(`.tc-ams[data-task-id="${safeTaskId}"]`).forEach(el => {
@@ -470,7 +499,7 @@ const GanttRender = (() => {
           } else {
             App.moveBarToTask(taskId, targetId);
             linkedStandaloneMsIds.forEach(msId => {
-              App.updateTask(msId, { linkedTaskId: targetId }, { chartOnly: true });
+              App.updateTask(msId, { linkedTaskId: targetId });
             });
             return;
           }
@@ -606,6 +635,12 @@ const GanttRender = (() => {
         if (!seg.start) return;
         const ss = new Date(seg.start), se = new Date(seg.end || seg.start);
         if (!min || ss < min) min = ss; if (!max || se > max) max = se;
+        (seg.milestones || []).forEach(m => {
+          if (!m.date) return;
+          const md = new Date(m.date);
+          if (!min || md < min) min = md;
+          if (!max || md > max) max = md;
+        });
       });
     });
     if (!min) { const d = new Date(); min = new Date(d); max = new Date(d); max.setDate(max.getDate() + 30); }

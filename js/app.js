@@ -85,15 +85,26 @@ const App = (() => {
   function addMsType(type, label, color) { msTypes.push({ type, label, color: color || '#607D8B' }); save(); }
 
   /* ===== Task CRUD ===== */
+  function normalizeSegment(seg = {}) {
+    return { ...seg, milestones: Array.isArray(seg.milestones) ? seg.milestones : [] };
+  }
+  function normalizeTaskShape(t = {}) {
+    return {
+      ...t,
+      milestones: Array.isArray(t.milestones) ? t.milestones : [],
+      segments: Array.isArray(t.segments) ? t.segments.map(normalizeSegment) : [],
+      linkedTaskId: t.linkedTaskId || '',
+    };
+  }
   function createTask(overrides = {}) {
     const today = todayStr();
     const lastTask = tasks.filter(t => !t.isMilestone).pop();
-    return {
+    return normalizeTaskShape({
       id: genId('t'), name: 'New Task', start: today, end: addDays(today, 7),
       scope: lastTask ? lastTask.scope : '', status: 'not-started', comment: '',
       barStyle: 'solid', color: '', isMilestone: false, linkedTaskId: '',
       milestones: [], segments: [], dependencies: '', progress: 0, ...overrides,
-    };
+    });
   }
 
   function addTask(overrides = {}) { const t = createTask(overrides); tasks.push(t); selectedId = t.id; save(); _onChange(); return t; }
@@ -180,12 +191,21 @@ const App = (() => {
     const t = tasks.find(x => x.id === taskId); if (!t || t.isMilestone) return;
     if (!t.segments) t.segments = [];
     const lastEnd = t.segments.length ? t.segments[t.segments.length - 1].end : t.end;
-    t.segments.push({ id: genId('seg'), name: '', start: addDays(lastEnd, 1), end: addDays(lastEnd, 7), barStyle: t.barStyle || 'solid', color: '', scope: '', status: 'not-started', comment: '' });
+    t.segments.push({ id: genId('seg'), name: '', start: addDays(lastEnd, 1), end: addDays(lastEnd, 7), barStyle: t.barStyle || 'solid', color: '', scope: '', status: 'not-started', comment: '', milestones: [] });
     save(); _onChange();
   }
   function updateSegment(taskId, segIdx, changes, opts = {}) {
     const t = tasks.find(x => x.id === taskId); if (!t || !t.segments || !t.segments[segIdx]) return;
-    Object.assign(t.segments[segIdx], changes); save();
+    Object.assign(t.segments[segIdx], changes);
+    const seg = t.segments[segIdx];
+    if (!Array.isArray(seg.milestones)) seg.milestones = [];
+    if (seg.milestones.length && (changes.start !== undefined || changes.end !== undefined)) {
+      seg.milestones.forEach(m => {
+        if (m.pin === 'start') m.date = seg.start;
+        else if (m.pin === 'end') m.date = seg.end;
+      });
+    }
+    save();
     if (opts.chartOnly) { _suppressTableRender = true; _onChange(); _suppressTableRender = false; }
     else _onChange();
   }
@@ -199,7 +219,7 @@ const App = (() => {
     if (!from || !to || to.isMilestone || !from.segments || !from.segments[segIdx]) return;
     if (!to.segments) to.segments = [];
     const [seg] = from.segments.splice(segIdx, 1);
-    to.segments.push(seg);
+    to.segments.push(normalizeSegment(seg));
     save(); _onChange();
   }
   function moveBarToTask(fromTaskId, toTaskId) {
@@ -211,7 +231,7 @@ const App = (() => {
       id: genId('seg'), name: from.name || '', start: from.start, end: from.end,
       barStyle: (from.barStyle && from.barStyle !== 'none') ? from.barStyle : 'solid',
       color: from.color || '', scope: from.scope || '', status: from.status || 'not-started',
-      comment: from.comment || '',
+      comment: from.comment || '', milestones: [],
     });
     from.barStyle = 'none';
     save(); _onChange();
@@ -244,7 +264,7 @@ const App = (() => {
         const data = JSON.parse(raw);
         if (Array.isArray(data)) { migrateV2(data); }
         else {
-          tasks = data.tasks || [];
+          tasks = (data.tasks || []).map(normalizeTaskShape);
           scopes = data.scopes || [];
           msTypes = data.msTypes || [...DEFAULT_MS_TYPES];
           settings = { ...DEFAULT_SETTINGS, ...(data.settings || {}) };
@@ -268,13 +288,13 @@ const App = (() => {
     scopes = [...phaseMap.values()];
     tasks = oldTasks.map(t => {
       const pName = t.phase || t.scope || ''; const sc = phaseMap.get(pName);
-      return { ...t, scope: sc ? sc.id : '', milestones: t.milestones || [], segments: t.segments || [], linkedTaskId: t.linkedTaskId || '' };
+      return normalizeTaskShape({ ...t, scope: sc ? sc.id : '' });
     });
     msTypes = [...DEFAULT_MS_TYPES]; settings = { ...DEFAULT_SETTINGS }; save();
   }
 
   function setData(newTasks, newScopes, newMsTypes, newSettings) {
-    tasks = newTasks || []; scopes = newScopes || [];
+    tasks = (newTasks || []).map(normalizeTaskShape); scopes = newScopes || [];
     msTypes = newMsTypes || [...DEFAULT_MS_TYPES];
     settings = { ...DEFAULT_SETTINGS, ...(newSettings || {}) };
     selectedId = tasks.length ? tasks[0].id : null;
